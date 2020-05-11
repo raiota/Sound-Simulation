@@ -84,14 +84,14 @@ class SpeakerParams(dict):
         return {key: value for key, value in zip(self.param_keys, param_list)}
 
 
-    def set_driving_function(self, speaker_no, frequency=None, value=1.0):
-        self[speaker_no]['driving function'] = value if not hasattr(value, "__iter__") \
-                                                else {f: val for f, val in zip(frequency, value)}
-
-
     def get_arbit_param(self, keys, speaker_no=None):
         if speaker_no is None:
             return [self[no][keys] for no in range(len(self))]
+
+
+    def set_driving_function(self, speaker_no, frequency=None, value=1.0):
+        self[speaker_no]['driving function'] = value if not hasattr(value, "__iter__") \
+                                                else {f: val for f, val in zip(frequency, value)}
 
 
     def driving_function2array(self, speaker_no):

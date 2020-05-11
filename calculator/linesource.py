@@ -1,22 +1,22 @@
 """
-Calculating sound field from circular source arrays
+Calculating sound field from ideal line source
 """
 
-
+from tqdm import tqdm
 import numpy as np
-from scipy.special import jn
+import quadpy
 
 from __init__ import SpeakerParams
 from define_region import InterestRegion
 
 
-class CircleFarType(InterestRegion):
+class IdealLine(InterestRegion):
     """
-    Calculating sound field from circular source arrays, using far-field approximation
+    Calculating sound field from ideal line source
 
-    Parameters
+    Parmaeters
     ----------
-    frequency : 1D-numpy.ndarray
+    frequency : array_like
         List of evaluating frequency [Hz]
     velocity : float, Default 344.0
         Sound velocity [m/s]
@@ -28,7 +28,7 @@ class CircleFarType(InterestRegion):
         See more documentation it.
     """
 
-    def __init__(self, frequency=None, velocity=344., **region_param):
+    def __init__(self, frequency=None, velocity=344., scheme=None,**region_param):
 
         self.velocity = velocity
         self.frequency = frequency
@@ -41,6 +41,11 @@ class CircleFarType(InterestRegion):
             super().__init__(shapes_of_region=region_param['shapes_of_region'], **region_param['kw_descretize'])
         except KeyError:
             pass
+
+        if scheme is None:
+            self.scheme = quadpy.line_segment.gauss_patterson(5)
+        else:
+            self.scheme = scheme
 
 
     def set_frequency(self, frequency):
@@ -87,17 +92,14 @@ class CircleFarType(InterestRegion):
             pass
 
 
-    def set_speakers(self, speaker_param_list, **driving_kwargs):
+    def set_line(self, speaker_param_list):
         """
-        Setting a loudspeaker array parameters
+        Setting a line speaker parameters
 
         Parameters
         ----------
         speaker_param_list : 1D-numpy.ndarray
-            1-D Array that is combined parameters of all loudspeakers into one dimension.
-            ex.) np.array([drive1, diameter1, x1, y1, z1, alpha1, beta1,
-                            drive2, diameter2, x2, y2, z2, alpha2, beta2,
-                            ..., driveM, diameterM, xM, yM, zM, alphaM, betaM])
+            a-D Array that is combined parameters of all loudspeakers into one dimension.
 
         Notes
         -----
@@ -106,67 +108,46 @@ class CircleFarType(InterestRegion):
         Other Parameters
         ----------------
         **driving_kwargs
-
         """
-        self.speakers = SpeakerParams(shape='circular', speaker_param_list=speaker_param_list)
+        self.line = SpeakerParams(shape='line', speaker_param_list=speaker_param_list)
 
 
-    def _generate_transfer_matrix(self, mesh=True):
-
-        speaker_diameters = np.array(self.speakers.get_arbit_param("diameter"))
-        speaker_xs = np.array(self.speakers.get_arbit_param("x"))
-        speaker_ys = np.array(self.speakers.get_arbit_param("y"))
-        speaker_zs = np.array(self.speakers.get_arbit_param("z"))
-        speaker_as = np.array(self.speakers.get_arbit_param("alpha"))
-        speaker_bs = np.array(self.speakers.get_arbit_param("beta"))
-
-        # GREEN FUNC.
-        if mesh:
-            self.cart2meshgrid(flatten=True)
-            tmp1, tmp2 = np.meshgrid(self.XX, speaker_xs, indexing='ij')
-            distance_x = tmp1 - tmp2
-            tmp1, tmp2 = np.meshgrid(self.YY, speaker_ys, indexing='ij')
-            distance_y = tmp1 - tmp2
-            tmp1, tmp2 = np.meshgrid(self.ZZ, speaker_zs, indexing='ij')
-            distance_z = tmp1 - tmp2
-        else:
-            tmp1, tmp2 = np.meshgrid(self.X, speaker_xs, indexing='ij')
-            distance_x = tmp1 - tmp2
-            tmp1, tmp2 = np.meshgrid(self.Y, speaker_ys, indexing='ij')
-            distance_y = tmp1 - tmp2
-            tmp1, tmp2 = np.meshgrid(self.Z, speaker_zs, indexing='ij')
-            distance_z = tmp1 - tmp2
-        distance_matrix = np.sqrt(distance_x**2 + distance_y**2 + distance_z**2)
-        greens_tensor = np.exp(1j * np.einsum('i,jk->ijk', self.wavenums, distance_matrix)) / distance_matrix
-
-        # DIRECTIVITY FUNC.
-        normal_vecs = np.array([np.sin(speaker_as)*np.cos(speaker_bs), np.sin(speaker_as)*np.sin(speaker_bs), np.cos(speaker_as)])
-        normal_vecs_norm = np.linalg.norm(normal_vecs, axis=0)
-        if mesh:
-            inner_matrix = np.einsum('i,j->ij', self.XX, normal_vecs[0]) + np.einsum('i,j->ij', self.YY, normal_vecs[1]) \
-                            + np.einsum('i,j->ij', self.ZZ, normal_vecs[2])
-        else:
-            inner_matrix = np.einsum('i,j->ij', self.X, normal_vecs[0]) + np.einsum('i,j->ij', self.Y, normal_vecs[1]) \
-                            + np.einsum('i,j->ij', self.Z, normal_vecs[2])
-        theta_matrix = np.arccos(inner_matrix / distance_matrix * normal_vecs_norm)
-        inside_vessel = np.einsum('i,jk->ijk', self.wavenums, np.sin(theta_matrix)) * speaker_diameters * 0.5
-        directivity_tensor = jn(1, inside_vessel) / inside_vessel
-        np.nan_to_num(directivity_tensor, nan=0.5, copy=False)
-
-        self.transfer_matrix = directivity_tensor * greens_tensor
-
-
-    def getPressure(self, is_driving_func=False, mesh=True):
+    def getPressure(self, is_driving_func=False, correct=1.0, mesh=True):
         """
         Compute the sound pressure
         """
-        self._generate_transfer_matrix(mesh=mesh)
-        if is_driving_func:
-            driving_matrix = np.array([self.speakers.driving_function2array(i) for i in range(len(self.speakers))])
-        else:
-            driving_matrix = np.ones((len(self.speakers), self.frequency.size))
+        line_drive = np.array(driving_function2array(0)) if is_driving_func \
+            else np.array([correct] * self.frequency.size)
+        line_length = np.array(self.line.get_arbit_param("length"))
+        line_x = self.line.get_arbit_param("x")[0]
+        line_y = self.line.get_arbit_param("y")[0]
+        line_z = self.line.get_arbit_param("z")[0]
+        line_a = self.line.get_arbit_param("alpha")[0]
+        line_b = self.line.get_arbit_param("beta")[0]
 
-        self.pressure = np.einsum('ijk,ki->ji', self.transfer_matrix, driving_matrix)
+        term_on_x = np.sin(line_a) * np.cos(line_b)
+        term_on_y = np.sin(line_a) * np.sin(line_b)
+        term_on_z = np.cos(line_a)
+
+        def green(l):
+            distance = np.sqrt((line_x + l*term_on_x - x)**2 + (line_y + l*term_on_y - y)**2 + (line_z + l*term_on_z - z)**2)
+            return np.exp(1j * k * distance) / distance
+
+        if mesh:
+            self.cart2meshgrid(flatten=True)
+            self.pressure = np.zeros((self.XX.size, self.frequency.size), dtype='complex128')
+
+            for i, x, y, z in tqdm(zip(range(self.XX.size), self.XX, self.YY, self.ZZ), total=self.XX.size, desc="[calc.]"):
+                for j, k in enumerate(self.wavenums):
+                    self.pressure[i,j] = line_drive[j] * self.scheme.integrate(green, [-line_length*.5, line_length*.5])
+
+        else:
+            self.pressure = np.zeros((self.X.size, self.frequency.size), dtype='complex128')
+
+            for i, x, y, z in tqdm(zip(range(self.X.size), self.X, self.Y, self.Z), total=self.X.size, desc="[calc.]"):
+                for j, k in enumerate(self.wavenums):
+                    self.pressure[i,j] = line_drive[j] * self.scheme.integrate(green, [-line_length*.5, line_length*.5])
+
         return self.pressure, self.get_data()
 
 
@@ -239,14 +220,6 @@ class CircleFarType(InterestRegion):
             return eval("self.get" + datatype)()
 
 
-    def calc_driving_function_using_least_square_method(self, p_des, regularization=0.01):
-        conj_tp_transfer_matrix = np.conj(np.einsum('ijk->ikj', self.transfer_matrix))
-        inside_inverse = np.einsum('ikj,ijk->ikk', self.transfer_matrix, conj_tp_transfer_matrix) - regularization * np.eye(len(self.speakers))
-        return np.einsum('ikk,ikj,ji->ki', np.linalg.inv(inside_inverse), conj_tp_transfer_matrix, p_des)
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -269,19 +242,11 @@ if __name__ == '__main__':
 
     FREQUENCY = np.array([250, 500, 1000, 2000, 4000, 8000])
 
-    SPEAKER_LIST = np.array([1., 0.08,  0.45, 0., 0., 0., 0.,
-                            1., 0.08,  0.35, 0., 0., 0., 0.,
-                            1., 0.08,  0.25, 0., 0., 0., 0.,
-                            1., 0.08,  0.15, 0., 0., 0., 0.,
-                            1., 0.08,    0., 0., 0., 0., 0.,
-                            1., 0.08, -0.15, 0., 0., 0., 0.,
-                            1., 0.08, -0.25, 0., 0., 0., 0.,
-                            1., 0.08, -0.35, 0., 0., 0., 0.,
-                            1., 0.08, -0.45, 0., 0., 0., 0.])
+    LINE_LIST = np.array([1., 8., 0., 0., 0., np.pi*.5, 0.])
 
-    calculator = CircleFarType(frequency=FREQUENCY, shapes_of_region='cartesian', kw_descretize=REGION_PARAM)
+    calculator = IdealLine(frequency=FREQUENCY, shapes_of_region='cartesian', kw_descretize=REGION_PARAM)
 
-    calculator.set_speakers(SPEAKER_LIST)
+    calculator.set_line(LINE_LIST)
 
     pressure, region = calculator.getPressure()
     level, _ = calculator.getSPL()
@@ -310,6 +275,7 @@ if __name__ == '__main__':
     fig.subplots_adjust(hspace=0.3)
     fig.colorbar(im, ax=axes.flat)
     plt.show()
+
 
 
     # -*-*-*- DIRECTIVITY -*-*-*-

@@ -43,7 +43,7 @@ class InterestRegion(object):
             self.R, self.Azimuth, self.Elevation = _spherical(self.kw_r, self.kw_azimuth, self.kw_elevation, seed)
 
 
-    def cart2meshgrid(self, flatten=False, indexing='ij'):
+    def cart2meshgrid(self, flatten=False, indexing='xy'):
         """
         Method for creating meshgrid from a cartesian coordinate array.
 
@@ -62,7 +62,7 @@ class InterestRegion(object):
         -----
         Attribute `XX`, `YY` and `ZZ` will be added.
         """
-        self.XX, self.YY, self.ZZ = np.meshgrid(self.X, self.Y, self.Z, indexing='ij')
+        self.XX, self.YY, self.ZZ = np.meshgrid(self.X, self.Y, self.Z, indexing=indexing)
         if flatten:
             self.XX = self.XX.ravel()
             self.YY = self.YY.ravel()
@@ -85,7 +85,7 @@ class InterestRegion(object):
         x, y, z
             the resulted cartesian coordinate.
         """
-        if hasattr(self, 'R') or hasattr(self, 'Azimuth'):
+        if hasattr(self, 'R') and hasattr(self, 'Azimuth'):
             if plane == 'xy':
                 try:
                     self.X = position_vector[0] + self.R * np.cos(self.Azimuth)
@@ -93,25 +93,25 @@ class InterestRegion(object):
                 except ValueError:
                     self.X = position_vector[0] + np.array([self.R[i] * np.cos(self.Azimuth) for i in self.R.size])
                     self.Y = position_vector[1] + np.array([self.R[i] * np.sin(self.Azimuth) for i in self.R.size])
-                self.Z = np.array([position_vector[2]])
+                self.Z = np.array([position_vector[2]] * self.X.size)
             elif plane == 'yz':
-                self.X = np.array([position_vector[0]])
                 try:
                     self.Y = position_vector[1] + self.R * np.cos(self.Azimuth)
                     self.Z = position_vector[2] + self.R * np.sin(self.Azimuth)
                 except ValueError:
                     self.Y = position_vector[1] + np.array([self.R[i] * np.cos(self.Azimuth) for i in self.R.size])
                     self.Z = position_vector[2] + np.array([self.R[i] * np.sin(self.Azimuth) for i in self.R.size]) 
+                self.X = np.array([position_vector[0]] * self.Y.size)
             elif plane == 'zx':
-                self.Y = np.array([position_vector[1]])
                 try:
                     self.Z = position_vector[2] + self.R * np.cos(self.Azimuth)
                     self.X = position_vector[0] + self.R * np.sin(self.Azimuth)
                 except ValueError:
                     self.Z = position_vector[2] + np.array([self.R[i] * np.cos(self.Azimuth) for i in self.R.size])
                     self.X = position_vector[0] + np.array([self.R[i] * np.sin(self.Azimuth) for i in self.R.size])
+                self.Y = np.array([position_vector[1]] * self.Z.size)
             else:
-                raise ValueError(f"argument *plane*={plane} is invalid.")
+                raise ValueError(f"argument *plane*={plane} is invalid, choose from 'xy', 'yz' or 'zx'.")
         else:
             raise AttributeError("Calling :method:`polar2cartesian`, there's needed to be initialized by `polar` shape.")
 
