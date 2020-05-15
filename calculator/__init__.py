@@ -84,6 +84,19 @@ class SpeakerParams(dict):
         return {key: value for key, value in zip(self.param_keys, param_list)}
 
 
+    def add_speaker(self, speaker_param_list):
+        is_divisible = len(speaker_param_list) % len(self.param_keys) == 0
+
+        if is_divisible:
+            speaker_num = int(len(speaker_param_list) / len(self.param_keys))
+            speaker_lists = speaker_param_list.reshape(speaker_num, len(self.param_keys)).tolist()
+
+            self.update({key+len(self): self._param_list2dict(value) for key, value in enumerate(speaker_lists)})
+
+        else:
+            raise ValueError('argument *speaker_param_list* cannot be transformed into the given *shape*.')
+
+
     def get_arbit_param(self, keys, speaker_no=None):
         if speaker_no is None:
             return [self[no][keys] for no in range(len(self))]

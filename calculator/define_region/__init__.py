@@ -177,7 +177,7 @@ def _discretize(scale, Min, Max, num=None, step=None, seed=None):
         if not num:
             raise ValueError("argument *num* is needed for random discretization.")
         else:
-            discretized_array = (Max - Min) * np.random.rand() + Min
+            discretized_array = (Max - Min) * np.random.rand(num) + Min
     else:
         raise ValueError(f"argument *scale*={scale} is invalid.")
 

@@ -6,8 +6,15 @@ from tqdm import tqdm
 import numpy as np
 import quadpy
 
-from __init__ import SpeakerParams
-from define_region import InterestRegion
+try:
+    from __init__ import SpeakerParams
+except:
+    from .__init__ import SpeakerParams
+
+try:
+    from define_region import InterestRegion
+except:
+    from .define_region import InterestRegion
 
 
 class IdealLine(InterestRegion):
@@ -28,7 +35,7 @@ class IdealLine(InterestRegion):
         See more documentation it.
     """
 
-    def __init__(self, frequency=None, velocity=344., scheme=None,**region_param):
+    def __init__(self, frequency=None, velocity=344., scheme=None, **region_param):
 
         self.velocity = velocity
         self.frequency = frequency
@@ -78,6 +85,8 @@ class IdealLine(InterestRegion):
             pass
 
         if region_object is not None:
+            self.shapes = region_object.shapes
+
             coord_datas = region_object.get_data()
             self.X = coord_datas.get("x")
             self.Y = coord_datas.get("y")
@@ -99,7 +108,7 @@ class IdealLine(InterestRegion):
         Parameters
         ----------
         speaker_param_list : 1D-numpy.ndarray
-            a-D Array that is combined parameters of all loudspeakers into one dimension.
+            1-D Array that is combined parameters of all loudspeakers into one dimension.
 
         Notes
         -----
@@ -112,12 +121,12 @@ class IdealLine(InterestRegion):
         self.line = SpeakerParams(shape='line', speaker_param_list=speaker_param_list)
 
 
-    def getPressure(self, is_driving_func=False, correct=1.0, mesh=True):
+    def getPressure(self, is_driving_func=False, correction_term=1.0, mesh=True):
         """
         Compute the sound pressure
         """
         line_drive = np.array(driving_function2array(0)) if is_driving_func \
-            else np.array([correct] * self.frequency.size)
+            else np.array([correction_term] * self.frequency.size)
         line_length = np.array(self.line.get_arbit_param("length"))
         line_x = self.line.get_arbit_param("x")[0]
         line_y = self.line.get_arbit_param("y")[0]
@@ -259,7 +268,7 @@ if __name__ == '__main__':
     fig.suptitle("Sound Pressure Level Plot", size=16)
 
     for i, ax in enumerate(axes.flat):
-        im = ax.pcolorfast(region["z"], region["x"], level[:,i].reshape(region["z"].size, region["x"].size), vmin=30, vmax=120, cmap='magma')
+        im = ax.pcolorfast(region["z"], region["x"], level[:,i].reshape(region["x"].size, region["z"].size), vmin=30, vmax=120, cmap='magma')
         ax.set_title(f'{FREQUENCY[i]} Hz')
     fig.subplots_adjust(hspace=0.3)
     fig.colorbar(im, ax=axes.flat)
@@ -270,7 +279,7 @@ if __name__ == '__main__':
     fig.suptitle("Phase Plot", size=16)
 
     for i, ax in enumerate(axes.flat):
-        im = ax.pcolorfast(region["z"], region["x"], phase[:,i].reshape(region["z"].size, region["x"].size), cmap='viridis')
+        im = ax.pcolorfast(region["z"], region["x"], phase[:,i].reshape(region["x"].size, region["z"].size), cmap='viridis')
         ax.set_title(f'{FREQUENCY[i]} Hz')
     fig.subplots_adjust(hspace=0.3)
     fig.colorbar(im, ax=axes.flat)

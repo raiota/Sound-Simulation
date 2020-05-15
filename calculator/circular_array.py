@@ -6,8 +6,15 @@ Calculating sound field from circular source arrays
 import numpy as np
 from scipy.special import jn
 
-from __init__ import SpeakerParams
-from define_region import InterestRegion
+try:
+    from __init__ import SpeakerParams
+except:
+    from .__init__ import SpeakerParams
+
+try:
+    from define_region import InterestRegion
+except:
+    from .define_region import InterestRegion
 
 
 class CircleFarType(InterestRegion):
@@ -73,6 +80,8 @@ class CircleFarType(InterestRegion):
             pass
 
         if region_object is not None:
+            self.shapes = region_object.shapes
+
             coord_datas = region_object.get_data()
             self.X = coord_datas.get("x")
             self.Y = coord_datas.get("y")
@@ -109,6 +118,23 @@ class CircleFarType(InterestRegion):
 
         """
         self.speakers = SpeakerParams(shape='circular', speaker_param_list=speaker_param_list)
+
+
+    def set_driving_function(self, driving_function_list, speaker_no=0):
+        """
+        Set frequency-dependent driving functions.
+        Argument *driving_function_list* is M*N-numpy.ndarray which is consisted of 
+        the number M of all speakers and the drive function vector of magnitude N corresponding to each frequency.
+
+        Parameters
+        ----------
+        speaker_no : int, default 0, optional
+            Initial speaker number to set the driving function
+        driving_function_list : M*N-numpy.ndarray
+        """
+        for i in range(driving_function_list.shape[0]):
+            self.speakers.set_driving_function(speaker_no+i, frequency=self.frequency,
+                                                value=driving_function_list[i])
 
 
     def _generate_transfer_matrix(self, mesh=True):
@@ -148,7 +174,7 @@ class CircleFarType(InterestRegion):
         else:
             inner_matrix = np.einsum('i,j->ij', self.X, normal_vecs[0]) + np.einsum('i,j->ij', self.Y, normal_vecs[1]) \
                             + np.einsum('i,j->ij', self.Z, normal_vecs[2])
-        theta_matrix = np.arccos(inner_matrix / distance_matrix * normal_vecs_norm)
+        theta_matrix = np.arccos(inner_matrix / (distance_matrix * normal_vecs_norm))
         inside_vessel = np.einsum('i,jk->ijk', self.wavenums, np.sin(theta_matrix)) * speaker_diameters * 0.5
         directivity_tensor = jn(1, inside_vessel) / inside_vessel
         np.nan_to_num(directivity_tensor, nan=0.5, copy=False)
@@ -241,7 +267,7 @@ class CircleFarType(InterestRegion):
 
     def calc_driving_function_using_least_square_method(self, p_des, regularization=0.01):
         conj_tp_transfer_matrix = np.conj(np.einsum('ijk->ikj', self.transfer_matrix))
-        inside_inverse = np.einsum('ikj,ijk->ikk', self.transfer_matrix, conj_tp_transfer_matrix) - regularization * np.eye(len(self.speakers))
+        inside_inverse = np.einsum('ikj,ijl->ikl', conj_tp_transfer_matrix, self.transfer_matrix) - regularization * np.eye(len(self.speakers))
         return np.einsum('ikk,ikj,ji->ki', np.linalg.inv(inside_inverse), conj_tp_transfer_matrix, p_des)
 
 
@@ -294,7 +320,7 @@ if __name__ == '__main__':
     fig.suptitle("Sound Pressure Level Plot", size=16)
 
     for i, ax in enumerate(axes.flat):
-        im = ax.pcolorfast(region["z"], region["x"], level[:,i].reshape(region["z"].size, region["x"].size), vmin=30, vmax=120, cmap='magma')
+        im = ax.pcolorfast(region["z"], region["x"], level[:,i].reshape(region["x"].size, region["z"].size), vmin=30, vmax=120, cmap='magma')
         ax.set_title(f'{FREQUENCY[i]} Hz')
     fig.subplots_adjust(hspace=0.3)
     fig.colorbar(im, ax=axes.flat)
@@ -305,7 +331,7 @@ if __name__ == '__main__':
     fig.suptitle("Phase Plot", size=16)
 
     for i, ax in enumerate(axes.flat):
-        im = ax.pcolorfast(region["z"], region["x"], phase[:,i].reshape(region["z"].size, region["x"].size), cmap='viridis')
+        im = ax.pcolorfast(region["z"], region["x"], phase[:,i].reshape(region["x"].size, region["z"].size), cmap='viridis')
         ax.set_title(f'{FREQUENCY[i]} Hz')
     fig.subplots_adjust(hspace=0.3)
     fig.colorbar(im, ax=axes.flat)
