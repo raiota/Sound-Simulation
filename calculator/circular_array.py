@@ -279,16 +279,16 @@ if __name__ == '__main__':
 
     REGION_PARAM = {
         "x": {
-            "Min": -5.0,
+            "Min": 0.,
             "Max": 5.0,
-            "step": 0.01,
+            "step": 0.02,
             "scale": 'equidistant'
         },
         "y": 0.,
         "z": {
             "Min": 1.0,
-            "Max": 11.0,
-            "step": 0.01,
+            "Max": 10.0,
+            "step": 0.02,
             "scale": 'equidistant'
         }
     }
