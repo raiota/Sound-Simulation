@@ -1,0 +1,26 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+flake8 = "*"
+pylint = "*"
+tqdm = "*"
+
+[packages]
+numpy = "*"
+scipy = "*"
+pandas = "*"
+quadpy = "*"
+deap = "*"
+matplotlib = "*"
+seaborn = "*"
+jupyter = "*"
+jupytext = "*"
+tqdm = "*"
+sklearn = "*"
+jupyterlab = "*"
+
+[requires]
+python_version = "3.7"
