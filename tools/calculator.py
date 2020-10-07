@@ -7,8 +7,12 @@ import numpy as np
 from scipy.special import jn
 from enum import Enum, auto
 
-import source
-import receiver
+try:
+    from . import source
+    from . import receiver
+except ImportError:
+    import source
+    import receiver
 
 
 
@@ -395,7 +399,7 @@ class ReproductionTool(object):
         self.secondary_sources = secondary_sources
 
         self.system_representer.set_sources(secondary_sources)
-        self.secondary_field_generator.set_sources.set_sources(secondary_sources)
+        self.secondary_field_generator.set_sources(secondary_sources)
 
 
     def get_driving_signals(self, approach=ReproductionApproach.PRESSURE_MATCHING, *args, **kwargs):
@@ -414,9 +418,13 @@ class ReproductionTool(object):
         return self.secondary_field_generator.get_pressure(is_driven=True, driving_signals=driving_signals)
 
 
-    def get_normalized_error(self, *args, **kwargs):
+    def get_normalized_error(self, take_average=False, *args, **kwargs):
 
         driving_signals = self.get_driving_signals(*args, **kwargs)
         p_rep_on_fields = self.secondary_field_generator.get_pressure(is_driven=True, driving_signals=driving_signals)
+        normalized_error = 10 * np.log10(np.abs(self.p_des_on_fields - p_rep_on_fields)**2 / np.abs(self.p_des_on_fields)**2)
 
-        return 10 * np.log10(np.abs(self.p_des_on_fields - p_rep_on_fields)**2 / np.abs(self.p_des_on_fields)**2)
+        if take_average:
+            return np.average(normalized_error, axis=1)
+        else:
+            return normalized_error

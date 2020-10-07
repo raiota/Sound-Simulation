@@ -66,7 +66,7 @@ class _SourcePlacementHelper(object):
                             of the loudspeaker are set to zero.")
 
         try:
-            self.add_sources(source_param_list)
+            self.add_sources(source_param_list.flatten())
         except AttributeError:
             return source_param_list
 
@@ -110,7 +110,7 @@ class _SourcePlacementHelper(object):
                             of the loudspeaker are set to zero.")
 
         try:
-            self.add_sources(source_param_list)
+            self.add_sources(source_param_list.flatten())
         except AttributeError:
             return source_param_list
 
@@ -148,7 +148,7 @@ class SourceParams(dict, _SourcePlacementHelper):
     ----------
     shape : enum
         Shapes of sources/speakers from :class:`SourceCategory`.
-    source_param_list : 1D or 2D-numpy.ndarray, optional.
+    source_param_list : 1D-numpy.ndarray, optional.
         The rows are lists of source/loudspeaker parameters and the columns correspond to each source/loudspeaker,
         The parameters along row must be in the order in which they appear in :class:`SourceVariables`,
         for 2D-shape examples of 4 circular sources/loudspeakers;
@@ -157,19 +157,10 @@ class SourceParams(dict, _SourcePlacementHelper):
             source_param_list = np.array([[x1, y1, z1, diameter1, elevation1, azimuth1],
                                             [x2, y2, z2, diameter2, elevation2, azimuth2],
                                             [x3, y3, z3, diameter3, elevation3, azimuth3],
-                                            [x4, y4, z4, diameter4, elevation4, azimuth4]])
-        =================================================================================================
-
-        for the 1D-shape of above, like;
-
-        =================================================================================================
-            source_param_list = np.array([[x1, y1, z1, diameter1, elevation1, azimuth1],
-                                            [x2, y2, z2, diameter2, elevation2, azimuth2],
-                                            [x3, y3, z3, diameter3, elevation3, azimuth3],
                                             [x4, y4, z4, diameter4, elevation4, azimuth4]]).flatten()
         =================================================================================================
 
-        also can be used.
+        can be used.
 
 
     About This
@@ -206,7 +197,9 @@ class SourceParams(dict, _SourcePlacementHelper):
     Described above means that this dictionary has 3 circular sources/speakers.
     """
 
-    def __init__(self, shape, source_param_list=None):
+    # list2dict = lambda keys, lists: {key: value for key, value in zip(keys, lists)}
+
+    def __init__(self, shape, source_param_list=None, *args, **kwargs):
 
         self.shape = shape
 
@@ -220,42 +213,39 @@ class SourceParams(dict, _SourcePlacementHelper):
             raise ValueError(f":arg:`shape`={shape} is invalid.")
 
         if source_param_list is not None:
-
-            if len(source_param_list.shape) == 1:
-                is_divisible = len(source_param_list) % len(self.param_keys) == 0
-
-                if is_divisible:
-                    source_num = int(len(source_param_list) / len(self.param_keys))
-                    source_lists = source_param_list.reshape(source_num, len(self.param_keys)).tolist()
-
-                    self.update({key: self._param_list2dict(value) for key,value in enumerate(source_lists)})
-
-                else:
-                    raise ValueError(f":arg:`speaker_param_list` cannot be transformed into the given :arg:`shape`.")
-
-            elif len(source_param_list.shape) == 2:
-                source_lists = source_param_list.tolist()
-                self.update({key: self._param_list2dict(value) for key,value in enumerate(source_lists)})
+            self.add_sources(source_param_list, *args, **kwargs)
 
 
-    def add_sources(self, source_param_list):
+    def add_sources(self, source_param_list, fixed_parameters=None, fixed_values=None):
         """ Add more sources/speakers on self, the required :arg:`source_param_list` is the same as the one in :meth:`__init__`.
         """
-        if len(source_param_list.shape) == 1:
-            is_divisible = len(source_param_list) % len(self.param_keys) == 0
+        if fixed_parameters and fixed_values is not None:
+            active_param_num = len(self.param_keys) - len(fixed_parameters)
+            is_divisible = len(source_param_list) % active_param_num == 0
 
             if is_divisible:
-                source_num = int(len(source_param_list) / len(self.param_keys))
-                source_lists = source_param_list.reshape(source_num, len(self.param_keys)).tolist()
+                source_num = int(len(source_param_list) / active_param_num)
+                source_list = source_param_list.reshape(source_num, active_param_num)
 
-                self.update({key+len(self): self._param_list2dict(value) for key,value in enumerate(source_lists)})
+                for name, value in zip(fixed_parameters, fixed_values):
+                    source_list = np.insert(source_list, self.param_keys.index(name), value, axis=1)
+
+                self.update({key+len(self): self._param_list2dict(value) for key,value in enumerate(source_list)})
 
             else:
                 raise ValueError(f":arg:`source_param_list` cannot be transformed into the given :arg:`shape`.")
 
-        elif len(source_param_list.shape) == 2:
-            source_lists = source_param_list.tolist()
-            self.update({key+len(self): self._param_list2dict(value) for key,value in enumerate(source_lists)})
+        elif fixed_parameters is None and fixed_values is None:
+            is_divisible = len(source_param_list) % len(self.param_keys) == 0
+
+            if is_divisible:
+                source_num = int(len(source_param_list) / len(self.param_keys))
+                source_list = source_param_list.reshape(source_num, len(self.param_keys)).tolist()
+
+                self.update({key+len(self): self._param_list2dict(value) for key,value in enumerate(source_list)})
+
+            else:
+                raise ValueError(f":arg:`source_param_list` cannot be transformed into the given :arg:`shape`.")
 
         else:
             raise ValueError(f":arg:`source_param_list` cannot be transformed into the given :arg:`shape`.")
