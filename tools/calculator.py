@@ -16,7 +16,7 @@ except ImportError:
 
 
 
-class _ConditionSettingTools(object):
+class ConditionBase(object):
 
     def __init__(self, sources, receivers, frequency, velocity=344.):
 
@@ -78,11 +78,11 @@ class _ConditionSettingTools(object):
 
 
 
-class _CalculationTools(object):
+class CalculationBase(object):
 
-    def get_pressure(self, driving_signals=None, is_driven=False):
-        """
-        Method for calculating sound pressure based on a linear equation using transfer matrix and driving functions on sources.
+    def get_pressure(self, driving_signals=None, is_driven=False, activation_vector=None):
+        """ a method for calculating sound pressure based on a linear equation
+        using transfer matrix and driving functions on sources.
 
         Parameters
         ----------
@@ -97,109 +97,72 @@ class _CalculationTools(object):
             Sound pressure distribution
         """
 
-        if is_driven:
-            self.pressure = np.einsum('ijk,ik->ij', self.transfer_matrix, driving_signals)
+        if activation_vector:
+            if is_driven:
+                self.pressure = np.einsum('ijk,kk,ik->ij', self.transfer_matrix, np.diag(activation_vector), driving_signals)
+            else:
+                pseudo_driving_signals = np.ones((self.frequency.size, len(self.sources)))
+                self.pressure = np.einsum('ijk,kk,ik->ij', self.transfer_matrix, np.diag(activation_vector), pseudo_driving_signals)
         else:
-            pseudo_driving_signals = np.ones((self.frequency.size, len(self.sources)))
-            self.pressure = np.einsum('ijk,ik->ij', self.transfer_matrix, pseudo_driving_signals)
+            if is_driven:
+                self.pressure = np.einsum('ijk,ik->ij', self.transfer_matrix, driving_signals)
+            else:
+                pseudo_driving_signals = np.ones((self.frequency.size, len(self.sources)))
+                self.pressure = np.einsum('ijk,ik->ij', self.transfer_matrix, pseudo_driving_signals)
 
         return self.pressure
 
 
-    def get_driving_signals_by_pressure_matching(self, p_des, regularize=True, regularization_param=0.01):
-        """
-        Method for calculating driving signals based on multipoint sound pressure control.
-
-        Parameters
-        ----------
-        p_des : numpy.ndarray-(F, M_mic)
-            The desired sound pressures.
-        regularize : bool, default True.
-            Whether to regularize.
-        regularization_param : float, optional, defaut 0.01.
-            The regularization parameter.
-        """
-        inv_transfer_matrix = np.array([np.linalg.pinv(g_omega) for g_omega in self.transfer_matrix])
-
-        if regularize == True:
-            return np.array([np.linalg.inv(inv_g_omega @ g_omega + regularization_param * np.eye(len(self.sources))) @ inv_g_omega @ p_des_omega
-                            for g_omega, inv_g_omega, p_des_omega in zip(self.transfer_matrix, inv_transfer_matrix, p_des)])
-        else:
-            return np.array([inv_g_omega @ p_des_omega for inv_g_omega, p_des_omega in zip(inv_transfer_matrix, p_des)])
-
-
-    def get_SPL(self, p0=10**(-5)*2.):
-        """
-        Compute the Sound Pressure Level(SPL) [dB]
+    def get_SPL(self, p0=10**(-5)*2., **kwargs):
+        """ a method for calculating the Sound Pressure Level(SPL) [dB]
 
         Parameters
         ----------
         p0 : float, optional, default 10**(-5)*2.
+            Reference sound pressure.
+        **kwargs : :meth:`get_pressure()` properties.
 
         Returns
         -------
         numpy.ndarray-(F, M)
             SPL distribution
-
-        Raises
-        ------
-        AttributeError
-            Before using this method, it is necessary to calculate the sound pressure using :meth:`get_pressure` first.
         """
         try:
-            spl = 10*np.log10(np.abs(self.pressure)**2) - 20*np.log10(p0)
+            return 10*np.log10(np.abs(self.pressure)**2) - 20*np.log10(p0)
         except AttributeError:
-            raise AttributeError("Before using this method, it is necessary to calculate the sound pressure using :meth:`get_pressure` first.")
-
-        return spl
+            return 10*np.log10(np.abs(self.get_pressure(**kwargs)**2) - 10*np.log10(p0))
 
 
-    def get_amplitude(self):
-        """
-        Compute the amplitude of sound pressure
+    def get_amplitude(self, **kwargs):
+        """ a method for calculating the amplitude of sound pressure
 
         Returns
         -------
         numpy.ndarray-(F, M)
             Amplitude distribution
-
-        Raises
-        ------
-        AttributeError
-            Before using this method, it is necessary to calculate the sound pressure using :meth:`get_pressure` first.
         """
         try:
-            amplitude = np.abs(self.pressure)
+            return np.abs(self.pressure)
         except AttributeError:
-            raise AttributeError("Before using this method, it is necessary to calculate the sound pressure using :meth:`get_pressure` first.")
-
-        return amplitude
+            return np.abs(self.get_pressure(**kwargs))
 
 
-    def get_phase(self):
-        """
-        Compute the amplitude of sound pressure
+    def get_phase(self, **kwargs):
+        """ a method for calculating the amplitude of sound pressure
 
         Returns
         -------
         numpy.ndarray-(F, M)
             Phase distribution
-
-        Raises
-        ------
-        AttributeError
-            Before using this method, it is necessary to calculate the sound pressure using :meth:`get_pressure` first.
         """
         try:
-            phase = np.angle(self.pressure)
+            return np.angle(self.pressure)
         except AttributeError:
-            raise AttributeError("Before using this method, it is necessary to calculate the sound pressure using :meth:`get_pressure` first.")
-
-        return phase
+            return np.angle(self.get_pressure(**kwargs))
 
 
 
-class PointSourceFreeFieldCalculator(_CalculationTools, _ConditionSettingTools):
+class PointSourceFreeFieldCalculator(CalculationBase, ConditionBase):
     """
     Calculating sound field from multiple point sources.
 
@@ -253,7 +216,7 @@ class PointSourceFreeFieldCalculator(_CalculationTools, _ConditionSettingTools):
 
 
 
-class CircularSourceFreeFieldCalculator(_CalculationTools, _ConditionSettingTools):
+class CircularSourceFreeFieldCalculator(CalculationBase, ConditionBase):
     """
     Calculating sound field from multiple circular sources.
 
@@ -323,108 +286,3 @@ class CircularSourceFreeFieldCalculator(_CalculationTools, _ConditionSettingTool
         np.nan_to_num(directivity_tensor, nan=0.5, copy=False)
 
         self.transfer_matrix = directivity_tensor * greens_tensor
-
-
-
-class FieldCategory(Enum):
-    SOURCE = auto()
-    PLANE = auto()
-
-
-
-class ReproductionApproach(Enum):
-    PRESSURE_MATCHING = auto()
-    HOA = auto()
-
-
-
-class ReproductionTool(object):
-
-    def __init__(self, primary_field_type, primary_source, fields, control_points, secondary_sources, frequency, velocity=344.):
-
-        self.primary_field_type = primary_field_type
-        self.primary_source = primary_source
-        self.fields = fields
-        self.control_points = control_points
-        self.secondary_sources = secondary_sources
-
-        self.frequency = frequency
-        self.velocity = velocity
-
-        if primary_field_type == FieldCategory.SOURCE:
-            self.primary_field_generator = self._define_calculator(sources=primary_source, receivers=fields)
-            self.primary_field_collector = self._define_calculator(sources=primary_source, receivers=control_points)
-        else:
-            raise ValueError(f"Sorry, method for the primary field of plane is now building...")
-
-        self.system_representer = self._define_calculator(sources=secondary_sources, receivers=control_points)
-        self.secondary_field_generator = self._define_calculator(sources=secondary_sources, receivers=fields)
-
-        self.p_des_on_fields = self.primary_field_generator.get_pressure()
-        self.p_des_at_mics = self.primary_field_collector.get_pressure()
-
-
-    def _define_calculator(self, sources, receivers):
-
-        if sources.shape == source.SourceCategory.POINT:
-            return PointSourceFreeFieldCalculator(sources=sources, receivers=receivers, frequency=self.frequency, velocity=self.velocity)
-        elif sources.shape == source.SourceCategory.CIRCULAR:
-            return CirucularSourceFreeFieldCalculator(sources=sources, receivers=receivers, frequency=self.frequency, velocity=self.velocity)
-        else:
-            raise ValueError(f"The source tyep of {source.shape} is not supported.")
-
-
-    def set_control_points(self, control_points):
-
-        self.control_points = control_points
-
-        self.primary_field_collector.set_receivers(control_points)
-        self.system_representer.set_receivers(control_points)
-
-        self.p_des_at_mics = self.primary_field_collector.get_pressure()
-
-
-    def set_fields(self, fields):
-
-        self.fields = fields
-
-        self.primary_field_generator.set_receivers(fields)
-        self.secondary_field_generator.set_receivers(fields)
-
-        self.p_des_on_fields = self.primary_field_generator.get_pressure()
-
-
-    def set_secondary_sources(self, secondary_sources):
-
-        self.secondary_sources = secondary_sources
-
-        self.system_representer.set_sources(secondary_sources)
-        self.secondary_field_generator.set_sources(secondary_sources)
-
-
-    def get_driving_signals(self, approach=ReproductionApproach.PRESSURE_MATCHING, *args, **kwargs):
-
-        if approach == ReproductionApproach.PRESSURE_MATCHING:
-            driving_signals = self.system_representer.get_driving_signals_by_pressure_matching(self.p_des_at_mics, *args, **kwargs)
-        else:
-            raise ValueError(f"The {approach} for sound field reproduction is not supported now.")
-
-        return driving_signals
-
-
-    def get_secondary_pressure(self, *args, **kwargs):
-
-        driving_signals = self.get_driving_signals(*args, **kwargs)
-        return self.secondary_field_generator.get_pressure(is_driven=True, driving_signals=driving_signals)
-
-
-    def get_normalized_error(self, take_average=False, *args, **kwargs):
-
-        driving_signals = self.get_driving_signals(*args, **kwargs)
-        p_rep_on_fields = self.secondary_field_generator.get_pressure(is_driven=True, driving_signals=driving_signals)
-        normalized_error = 10 * np.log10(np.abs(self.p_des_on_fields - p_rep_on_fields)**2 / np.abs(self.p_des_on_fields)**2)
-
-        if take_average:
-            return np.average(normalized_error, axis=1)
-        else:
-            return normalized_error

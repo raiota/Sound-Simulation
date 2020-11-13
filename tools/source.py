@@ -21,8 +21,8 @@ class SourceCategory(Enum):
 
 class SourceVariables(object):
     POINT =    ('x', 'y', 'z')
-    LINE =     ('x', 'y', 'z', 'Length', 'Elevation', 'Azimuth')
-    CIRCULAR = ('x', 'y', 'z', 'Diameter', 'Elevation', 'Azimuth')
+    LINE =     ('x', 'y', 'z', 'length', 'elevation', 'azimuth')
+    CIRCULAR = ('x', 'y', 'z', 'diameter', 'elevation', 'azimuth')
 
 
 
@@ -35,6 +35,21 @@ class _SourcePlacementHelper(object):
     --------
     This class is recommended for use in :class:`SpeakerParams`.
     """
+
+    def define_temp_sources(self):
+        """
+        Define the temporary used source.
+        """
+
+        source_param_list = np.zeros(len(self.param_keys))
+
+        try:
+            self.add_sources(source_param_list)
+        except AttributeError:
+            return None
+
+        return self
+
 
     def define_sources_on_line(self, source_num, start_point, end_point):
         """
@@ -49,10 +64,6 @@ class _SourcePlacementHelper(object):
             The start point of line on cartesian coordinate.
         end_point : numpy.ndarray-(3,)
             The end point of line on cartesian coordinate.
-
-        Warning
-        -------
-
         """
 
         source_param_list = np.zeros((source_num, len(self.param_keys)))
@@ -69,6 +80,8 @@ class _SourcePlacementHelper(object):
             self.add_sources(source_param_list.flatten())
         except AttributeError:
             return source_param_list
+
+        return self
 
 
     def define_sources_on_spherical(self, source_num, centre, r, azimuthes, elevations):
@@ -88,10 +101,6 @@ class _SourcePlacementHelper(object):
             The azimuthes of sources/speakers.
         elevations : array_like-(source_num,)
             The elevations of sources/speakers.
-
-        Warning
-        -------
-
         """
 
         if len(azimuthes) == source_num and len(elevations) == source_num:
@@ -114,6 +123,8 @@ class _SourcePlacementHelper(object):
         except AttributeError:
             return source_param_list
 
+        return self
+
 
 
 class SourceParams(dict, _SourcePlacementHelper):
@@ -134,14 +145,14 @@ class SourceParams(dict, _SourcePlacementHelper):
             'x', 'y', 'z': the position of the source/speaker on cartesian coordinate [m]
         - 'line': IDEAL line source
             'x', 'y', 'z': the position of the centre of line on cartesian coordinate [m]
-            'Length': the total length of the line source [m]
-            'Elevation': the angle of line vector from z axis [rad]
-            'Azimuth': the angle of line vector from x axis [rad]
+            'length': the total length of the line source [m]
+            'elevation': the angle of line vector from z axis [rad]
+            'azimuth': the angle of line vector from x axis [rad]
         - 'circular': IDEAL circular source
             'x', 'y', 'z': the position of the centre of circle on cartesian coordinate [m]
-            'Diameter': the diameter of the circular source [m]
-            'Elevation': the angle of normal vector of circle surface from z axis [m]
-            'Azimuth': the angle of normal vector of circle surface from x axis [m]
+            'diameter': the diameter of the circular source [m]
+            'elevation': the angle of normal vector of circle surface from z axis [m]
+            'azimuth': the angle of normal vector of circle surface from x axis [m]
 
 
     Parameters
@@ -172,25 +183,25 @@ class SourceParams(dict, _SourcePlacementHelper):
                 "x": ---,               # ¯|
                 "y": ---,               #  |
                 "z": ---,               #  | <--- means;
-                "Diameter": ---,        #  |          "parameter": "value"  (2)
-                "Elevation": ---,       #  |
-                "Azimuth": ---,         # _|
+                "diameter": ---,        #  |          "parameter": "value"  (2)
+                "elevation": ---,       #  |
+                "azimuth": ---,         # _|
             },
             1: {                        # <--- Speaker/Source Number(key)   (1)
                 "x": ---,               # ¯|
                 "y": ---,               #  |
                 "z": ---,               #  | <--- means;
-                "Diameter": ---,        #  |          "parameter": "value"  (2)
-                "Elevation": ---,       #  |
-                "Azimuth": ---,         # _|
+                "diameter": ---,        #  |          "parameter": "value"  (2)
+                "elevation": ---,       #  |
+                "azimuth": ---,         # _|
             },
             2: {                        # <--- Speaker/Source Number(key)   (1)
                 "x": ---,               # ¯|
                 "y": ---,               #  |
                 "z": ---,               #  | <--- means;
-                "Diameter": ---,        #  |          "parameter": "value"  (2)
-                "Elevation": ---,       #  |
-                "Azimuth": ---,         # _|
+                "diameter": ---,        #  |          "parameter": "value"  (2)
+                "elevation": ---,       #  |
+                "azimuth": ---,         # _|
             }
         }
 
